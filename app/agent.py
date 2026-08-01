@@ -5,8 +5,7 @@ import re
 from typing import Any
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, ToolMessage
-from langchain_core.tools import StructuredTool
+from langchain_core.messages import AIMessage
 from langgraph.graph.state import CompiledStateGraph
 
 from app.llm import get_llm
@@ -58,36 +57,6 @@ Field rules:
 _triage_agent: CompiledStateGraph | None = None
 
 
-def _build_tools() -> list[StructuredTool]:
-    """Register existing lookup functions as LangChain tools."""
-    return [
-        StructuredTool.from_function(
-            func=lookup_customer_profile,
-            name="lookup_customer_profile",
-            description=(
-                "Look up a customer profile by customer_id. "
-                "Use for account status, SIM status, active plan, and recent ticket details."
-            ),
-        ),
-        StructuredTool.from_function(
-            func=lookup_network_status,
-            name="lookup_network_status",
-            description=(
-                "Look up network status for a city. "
-                "Use for outage, signal strength, and estimated resolution details."
-            ),
-        ),
-        StructuredTool.from_function(
-            func=lookup_knowledge,
-            name="lookup_knowledge",
-            description=(
-                "Look up a telecom knowledge article by topic. "
-                "Use for SIM Replacement, Porting, Recharge Failure, Billing Issues, or Network Issues."
-            ),
-        ),
-    ]
-
-
 def create_triage_agent() -> CompiledStateGraph:
     """Create and return the configured telecom triage agent."""
     global _triage_agent
@@ -96,7 +65,7 @@ def create_triage_agent() -> CompiledStateGraph:
 
     _triage_agent = create_agent(
         model=get_llm(),
-        tools=_build_tools(),
+        tools=[],
         system_prompt=SYSTEM_PROMPT,
     )
     return _triage_agent
@@ -153,26 +122,19 @@ def _extract_final_text(result: dict[str, Any]) -> str:
     raise ValueError("Agent response did not contain a final AI message.")
 
 
-def _parse_tool_content(observation: Any) -> dict[str, Any]:
-    """Convert a tool observation into a dictionary."""
-    if isinstance(observation, dict):
-        return observation
-
-    try:
-        parsed = json.loads(observation)
-        return parsed if isinstance(parsed, dict) else {"result": parsed}
-    except (json.JSONDecodeError, TypeError):
-        return {"result": observation}
-
-
-def _extract_tool_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Extract the selected tool result from the agent's message history."""
-    messages = result.get("messages", [])
-    tool_messages = [message for message in messages if isinstance(message, ToolMessage)]
-    if not tool_messages:
-        return {}
-
-    return _parse_tool_content(tool_messages[-1].content)
+def _execute_selected_tool(
+    next_tool: str,
+    request: TriageRequest,
+    parsed: dict[str, Any],
+) -> dict[str, Any]:
+    """Execute the lookup function chosen in the LLM triage response."""
+    if next_tool == "lookup_customer_profile":
+        return lookup_customer_profile(request.customer_id)
+    if next_tool == "lookup_network_status":
+        return lookup_network_status(request.location or "")
+    if next_tool == "lookup_knowledge":
+        return lookup_knowledge(parsed["category"])
+    return {}
 
 
 def run_triage(request: TriageRequest) -> dict[str, Any]:
@@ -189,5 +151,5 @@ def run_triage(request: TriageRequest) -> dict[str, Any]:
     parsed = _extract_json(_extract_final_text(result))
     response = TriageResponse.model_validate(parsed)
     output = response.model_dump()
-    output["tool_result"] = _extract_tool_result(result)
+    output["tool_result"] = _execute_selected_tool(parsed["next_tool"], request, parsed)
     return output
