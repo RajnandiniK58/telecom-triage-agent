@@ -1,12 +1,15 @@
 """Streamlit frontend for the Telecom Triage Agent API."""
 
+import html
 import json
+import os
 
 import requests
 import streamlit as st
 
-# FastAPI backend endpoint
-TRIAGE_API_URL = "http://127.0.0.1:8000/triage"
+# FastAPI backend endpoint (override with the API_URL env var, e.g. when deployed)
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
+TRIAGE_API_URL = f"{API_URL}/triage"
 
 # Map backend priority codes to customer-friendly labels
 CUSTOMER_PRIORITY_LABELS = {
@@ -36,6 +39,14 @@ CUSTOMER_NEXT_STEPS = {
     "Network Issues": (
         "Please restart your device and toggle airplane mode for 30 seconds. "
         "If service does not return, check for outages in your area."
+    ),
+    "Roaming": (
+        "Please make sure data roaming is enabled and select the partner network "
+        "manually. Our team will confirm that your roaming pack is active."
+    ),
+    "SMS Issues": (
+        "Please restart your phone and clear your SMS inbox if it is full. "
+        "We will check that messaging is correctly set up on your number."
     ),
 }
 
@@ -124,7 +135,7 @@ def inject_custom_styles() -> None:
 def priority_badge_html(priority: str) -> str:
     """Return a colored HTML badge for admin priority display."""
     bg_color, text_color = PRIORITY_BADGE_STYLES.get(priority, ("#6c757d", "#ffffff"))
-    label = priority if priority in PRIORITY_BADGE_STYLES else priority or "N/A"
+    label = html.escape(priority if priority in PRIORITY_BADGE_STYLES else priority or "N/A")
     return (
         f'<span class="priority-badge" style="background-color:{bg_color};'
         f'color:{text_color};">{label}</span>'
@@ -151,7 +162,35 @@ def estimated_resolution_time(priority: str) -> str:
     """Return an estimated resolution window for the customer view."""
     return ESTIMATED_RESOLUTION.get(priority, "Within 48 hours")
 
+MAX_REQUESTS_PER_SESSION = 15
 
+
+def _analyze_direct(customer_id: str, location: str, complaint: str) -> dict | None:
+    """Run the agent in-process (used when no API_URL is set, e.g. on Streamlit Cloud)."""
+    from app.agent import CustomerNotFoundError, run_triage
+    from app.llm import LLMConfigError
+    from app.schemas import TriageRequest
+
+    used = st.session_state.get("n_requests", 0)
+    if used >= MAX_REQUESTS_PER_SESSION:
+        st.warning("Demo limit reached for this session. Please refresh later.")
+        return None
+    st.session_state["n_requests"] = used + 1
+
+    try:
+        request = TriageRequest(
+            customer_id=customer_id, message=complaint, location=location or None
+        )
+        return run_triage(request).model_dump(mode="json")
+    except CustomerNotFoundError:
+        st.error(f"Customer '{customer_id.strip()}' not found.")
+    except LLMConfigError:
+        st.error("The triage service is not configured.")
+    except ValueError:
+        st.error("Please enter a customer ID and a complaint (at least 3 characters).")
+    except Exception:
+        st.error("Something went wrong while triaging the ticket. Please try again.")
+    return None
 def analyze_complaint(customer_id: str, location: str, complaint: str) -> dict | None:
     """Send the complaint to the triage API and return the JSON response."""
     payload = {
@@ -166,8 +205,7 @@ def analyze_complaint(customer_id: str, location: str, complaint: str) -> dict |
         return response.json()
     except requests.exceptions.ConnectionError:
         st.error(
-            "Could not connect to the API. Make sure the FastAPI server is running at "
-            "http://127.0.0.1:8000"
+            f"Could not connect to the API. Make sure the FastAPI server is running at {API_URL}"
         )
     except requests.exceptions.Timeout:
         st.error("The request timed out. Please try again.")
@@ -187,6 +225,7 @@ def display_customer_view(result: dict) -> None:
     """Show a simplified, customer-friendly ticket summary."""
     category = result.get("category", "General Support")
     priority = result.get("priority", "P2")
+    safe_category = html.escape(str(category))
 
     st.markdown("---")
     st.markdown("### Ticket Summary")
@@ -196,7 +235,7 @@ def display_customer_view(result: dict) -> None:
             f"""
             <div class="info-row">
                 <div class="info-label">Issue Category</div>
-                <div class="info-value">{category}</div>
+                <div class="info-value">{safe_category}</div>
             </div>
             <div class="info-row">
                 <div class="info-label">Ticket Status</div>
@@ -229,6 +268,12 @@ def display_admin_view(result: dict) -> None:
 
     st.markdown("---")
 
+    if result.get("needs_human_review"):
+        st.warning(
+            "Automatic triage was unavailable for this ticket. "
+            "A default decision was used and it needs manual review."
+        )
+
     # Section A: Triage Summary
     st.markdown("### A. Triage Summary")
     with st.container(border=True):
@@ -236,7 +281,10 @@ def display_admin_view(result: dict) -> None:
 
         with col1:
             st.markdown("**Category**")
-            st.markdown(f"<p style='font-size:1.05rem;'>{category}</p>", unsafe_allow_html=True)
+            st.markdown(
+                f"<p style='font-size:1.05rem;'>{html.escape(str(category))}</p>",
+                unsafe_allow_html=True,
+            )
 
         with col2:
             st.markdown("**Priority**")
@@ -244,10 +292,15 @@ def display_admin_view(result: dict) -> None:
 
         with col3:
             st.markdown("**Selected Tool**")
-            st.markdown(f"<p style='font-size:1.05rem;'>{next_tool}</p>", unsafe_allow_html=True)
+            st.markdown(
+                f"<p style='font-size:1.05rem;'>{html.escape(str(next_tool))}</p>",
+                unsafe_allow_html=True,
+            )
 
     st.markdown("")
-
+    secondary = result.get("secondary_issues") or []
+    if secondary:
+        st.markdown(f"**Also mentioned:** {', '.join(secondary)}")
     # Section B: AI Reasoning
     st.markdown("### B. AI Reasoning")
     with st.container(border=True):
