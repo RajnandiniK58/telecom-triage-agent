@@ -23,5 +23,20 @@
     "topic": "Network Issues",
     "summary": "Network problems include low signal, call drops, no internet, and complete outages, often linked to tower maintenance or congestion.",
     "recommended_action": "Check city-level outage dashboard, perform basic troubleshooting (airplane mode toggle, network reset, device restart), escalate to network operations if issue persists beyond known outage window."
+  },
+  {
+    "topic": "Roaming",
+    "summary": "Roaming problems include no service abroad, roaming pack not active, or data not working on a foreign network, usually caused by the pack not being activated, the handset's roaming settings, or partner-network issues.",
+    "recommended_action": "Confirm an international roaming pack is active on the account, ask the customer to enable data roaming and select the partner network manually, re-provision roaming from the backend if the pack is active, and escalate to the roaming team if there is still no service."
+  },
+  {
+    "topic": "SMS Issues",
+    "summary": "SMS failures include messages not sending or arriving, and OTPs or banking short codes not being delivered, often due to DLT/short-code blocks, SMSC problems or full inboxes.",
+    "recommended_action": "Check that SMS service and the SMSC number are correctly provisioned, confirm the short code is not blocked or on DND, ask the customer to clear a full inbox and restart the phone, and raise a messaging-platform ticket if the issue persists."
+  },
+  {
+    "topic": "Other",
+    "summary": "General or uncategorised support request that does not match a known topic.",
+    "recommended_action": "Review the customer's profile and ticket history, ask clarifying questions if the issue is unclear, and route to a human support agent."
   }
 ]
