@@ -1,155 +1,161 @@
-"""Telecom triage agent powered by LangChain and Gemini."""
+"""Telecom triage agent powered by LangChain/LangGraph and Gemini."""
 
-import json
-import re
+from __future__ import annotations
+
+import logging
+import time
 from typing import Any
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage
 from langgraph.graph.state import CompiledStateGraph
 
-from app.llm import get_llm
-from app.schemas import TriageRequest, TriageResponse
+from app.llm import LLMConfigError, get_llm
+from app.prompts import SYSTEM_PROMPT
+from app.schemas import (
+    Category,
+    Priority,
+    ToolName,
+    TriageDecision,
+    TriageRequest,
+    TriageResponse,
+)
 from app.tools import (
     lookup_customer_profile,
     lookup_knowledge,
     lookup_network_status,
 )
 
-SYSTEM_PROMPT = """You are a Telecom Support Triage Agent.
+logger = logging.getLogger("triage.agent")
 
-Your job is to analyze customer complaints and produce a structured triage decision.
+MAX_LLM_ATTEMPTS = 2
+RETRY_BACKOFF_SECONDS = 3.0
+# Gemini free tier allows only a few requests per minute; an instant retry just fails again.
+RATE_LIMIT_BACKOFF_SECONDS = 15.0
 
-Available tools:
-- lookup_customer_profile: Look up account, plan, SIM status, and recent ticket history by customer_id.
-- lookup_network_status: Check network outages and signal strength for a city.
-- lookup_knowledge: Retrieve recommended actions for a known telecom topic.
+# Used when the LLM fails twice: the ticket is never lost, it is flagged for a human.
+FALLBACK_DECISION = TriageDecision(
+    category=Category.OTHER,
+    priority=Priority.P1,
+    next_tool=ToolName.CUSTOMER_PROFILE,
+    reasoning="Automatic triage was unavailable, so this ticket was routed for manual review.",
+    why="Fallback decision after a model error or invalid model output.",
+)
 
-Instructions:
-1. Understand the telecom complaint from the customer message.
-2. Determine the complaint category (for example: SIM Replacement, Porting, Recharge Failure, Billing Issues, Network Issues).
-3. Assign priority as P0 (critical/urgent), P1 (high), or P2 (standard).
-4. Decide which single tool is required to investigate this case.
-5. Call ONLY that required tool. Never call unnecessary tools.
-6. Use the tool result in your analysis.
-7. Explain your reasoning clearly.
 
-Priority guidance:
-- P0: Service outage, blocked SIM with urgent impact, or complete loss of connectivity.
-- P1: Billing disputes, porting delays, recharge failures, or account issues needing prompt action.
-- P2: General inquiries or low-impact issues.
+class CustomerNotFoundError(Exception):
+    """Raised when the customer ID does not exist in the customer data."""
 
-Respond with ONLY valid JSON in this exact format (no markdown, no extra text):
-{{
-    "category": "...",
-    "priority": "...",
-    "next_tool": "...",
-    "reasoning": "...",
-    "why": "..."
-}}
-
-Field rules:
-- next_tool must be exactly one of: lookup_customer_profile, lookup_network_status, lookup_knowledge
-- reasoning: step-by-step triage analysis including tool findings
-- why: short justification for the category, priority, and tool choice
-"""
 
 _triage_agent: CompiledStateGraph | None = None
 
 
 def create_triage_agent() -> CompiledStateGraph:
-    """Create and return the configured telecom triage agent."""
-    global _triage_agent
-    if _triage_agent is not None:
-        return _triage_agent
+    """Create (once) and return the triage agent.
 
-    _triage_agent = create_agent(
-        model=get_llm(),
-        tools=[],
-        system_prompt=SYSTEM_PROMPT,
-    )
+    ``response_format`` makes the agent return a validated ``TriageDecision``
+    in ``result["structured_response"]`` instead of free text we have to parse.
+    """
+    global _triage_agent
+    if _triage_agent is None:
+        _triage_agent = create_agent(
+            model=get_llm(),
+            tools=[],
+            system_prompt=SYSTEM_PROMPT,
+            response_format=TriageDecision,
+        )
     return _triage_agent
 
 
 def _build_user_input(request: TriageRequest) -> str:
     """Format a triage request into a prompt for the agent."""
-    location = request.location or "Not provided"
     return (
         f"Customer ID: {request.customer_id}\n"
-        f"Location: {location}\n"
+        f"Location: {request.location or 'Not provided'}\n"
         f"Complaint: {request.message}"
     )
 
 
-def _extract_json(text: str) -> dict[str, Any]:
-    """Extract and parse a JSON object from the agent's final response."""
-    cleaned = text.strip()
-
-    code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", cleaned, re.DOTALL)
-    if code_block_match:
-        cleaned = code_block_match.group(1)
-
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
-    if start == -1 or end == -1 or end < start:
-        raise ValueError("Agent response did not contain valid JSON output.")
-
-    return json.loads(cleaned[start : end + 1])
+def _invoke_llm(request: TriageRequest) -> TriageDecision:
+    """One LLM call returning a validated decision (the seam tests patch)."""
+    result = create_triage_agent().invoke(
+        {"messages": [{"role": "user", "content": _build_user_input(request)}]}
+    )
+    structured = result.get("structured_response")
+    if structured is None:
+        raise ValueError("Agent returned no structured response.")
+    return TriageDecision.model_validate(structured)
 
 
-def _extract_final_text(result: dict[str, Any]) -> str:
-    """Get the final AI message text from the agent result."""
-    messages = result.get("messages", [])
-    for message in reversed(messages):
-        if not isinstance(message, AIMessage) or not message.content:
-            continue
+def _backoff_seconds(exc: Exception) -> float:
+    """Wait longer after a rate-limit (429) error than after other errors."""
+    text = str(exc)
+    if "429" in text or "RESOURCE_EXHAUSTED" in text:
+        return RATE_LIMIT_BACKOFF_SECONDS
+    return RETRY_BACKOFF_SECONDS
 
-        content = message.content
-        if isinstance(content, str):
-            return content
 
-        if isinstance(content, list):
-            text_parts: list[str] = []
-            for block in content:
-                if isinstance(block, str):
-                    text_parts.append(block)
-                elif isinstance(block, dict) and block.get("type") == "text":
-                    text_parts.append(str(block.get("text", "")))
-            combined = "".join(text_parts).strip()
-            if combined:
-                return combined
-
-    raise ValueError("Agent response did not contain a final AI message.")
+def _decide(request: TriageRequest) -> tuple[TriageDecision, bool]:
+    """Return ``(decision, used_fallback)``; retry once, then fall back."""
+    for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
+        started = time.perf_counter()
+        try:
+            decision = _invoke_llm(request)
+            logger.info(
+                "llm ok attempt=%d latency=%.2fs", attempt, time.perf_counter() - started
+            )
+            return decision, False
+        except LLMConfigError:
+            raise  # a setup problem, not a transient one: surface it
+        except Exception as exc:
+            logger.exception(
+                "llm failed attempt=%d latency=%.2fs",
+                attempt,
+                time.perf_counter() - started,
+            )
+            if attempt < MAX_LLM_ATTEMPTS:
+                time.sleep(_backoff_seconds(exc))
+    return FALLBACK_DECISION, True
 
 
 def _execute_selected_tool(
-    next_tool: str,
+    decision: TriageDecision,
     request: TriageRequest,
-    parsed: dict[str, Any],
+    profile: dict[str, Any],
 ) -> dict[str, Any]:
-    """Execute the lookup function chosen in the LLM triage response."""
-    if next_tool == "lookup_customer_profile":
-        return lookup_customer_profile(request.customer_id)
-    if next_tool == "lookup_network_status":
-        return lookup_network_status(request.location or "")
-    if next_tool == "lookup_knowledge":
-        return lookup_knowledge(parsed["category"])
+    """Run the lookup the model selected."""
+    if decision.next_tool is ToolName.CUSTOMER_PROFILE:
+        return profile
+    if decision.next_tool is ToolName.NETWORK_STATUS:
+        # No location in the form? Use the city on the customer's account.
+        city = request.location or str(profile.get("city", ""))
+        return lookup_network_status(city)
+    if decision.next_tool is ToolName.KNOWLEDGE:
+        return lookup_knowledge(decision.category.value)
     return {}
 
 
-def run_triage(request: TriageRequest) -> dict[str, Any]:
-    """Run the triage agent and return a structured response dictionary."""
-    agent = create_triage_agent()
-    result = agent.invoke(
-        {
-            "messages": [
-                {"role": "user", "content": _build_user_input(request)},
-            ]
-        }
-    )
+def run_triage(request: TriageRequest) -> TriageResponse:
+    """Triage one complaint end to end."""
+    # Cheap local check first: don't spend an LLM call on an unknown customer.
+    profile = lookup_customer_profile(request.customer_id)
+    if "error" in profile:
+        raise CustomerNotFoundError(request.customer_id)
 
-    parsed = _extract_json(_extract_final_text(result))
-    response = TriageResponse.model_validate(parsed)
-    output = response.model_dump()
-    output["tool_result"] = _execute_selected_tool(parsed["next_tool"], request, parsed)
-    return output
+    started = time.perf_counter()
+    decision, used_fallback = _decide(request)
+    tool_result = _execute_selected_tool(decision, request, profile)
+
+    logger.info(
+        "triage customer=%s category=%s priority=%s tool=%s fallback=%s total=%.2fs",
+        request.customer_id,
+        decision.category.value,
+        decision.priority.value,
+        decision.next_tool.value,
+        used_fallback,
+        time.perf_counter() - started,
+    )
+    return TriageResponse(
+        **decision.model_dump(),
+        tool_result=tool_result,
+        needs_human_review=used_fallback,
+    )
