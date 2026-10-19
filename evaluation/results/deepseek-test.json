@@ -1,0 +1,101 @@
+{
+  "run_at": "2026-10-18T06:48:58+00:00",
+  "summary": {
+    "total_cases": 3,
+    "scored": 3,
+    "fallbacks": 0,
+    "category_accuracy": 1.0,
+    "priority_accuracy": 0.6666666666666666,
+    "tool_accuracy": 1.0,
+    "all_correct": 0.6666666666666666,
+    "avg_latency_s": 2.15,
+    "by_category": {
+      "Network Issues": {
+        "n": 3,
+        "category_correct": 3
+      }
+    },
+    "by_tag": {
+      "ambiguous": {
+        "n": 1,
+        "category_correct": 1,
+        "priority_correct": 1
+      }
+    },
+    "priority_confusion": {
+      "P0": {
+        "P1": 1,
+        "P0": 1
+      },
+      "P1": {
+        "P1": 1
+      },
+      "P2": {}
+    }
+  },
+  "results": [
+    {
+      "id": "net-01",
+      "tags": [],
+      "message": "Network problem since 2 days",
+      "expected_category": "Network Issues",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_network_status"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P1",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 2.8,
+      "category_ok": true,
+      "priority_ok": false,
+      "tool_ok": true,
+      "all_ok": false
+    },
+    {
+      "id": "net-02",
+      "tags": [],
+      "message": "No signal at all since this morning, I can't make or receive any calls",
+      "expected_category": "Network Issues",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_network_status"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P0",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 2.19,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "net-03",
+      "tags": [
+        "ambiguous"
+      ],
+      "message": "My phone shows no service whenever I am indoors",
+      "expected_category": "Network Issues",
+      "expected_priority": "P1",
+      "expected_tools": [
+        "lookup_network_status",
+        "lookup_customer_profile"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P1",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.45,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    }
+  ]
+}

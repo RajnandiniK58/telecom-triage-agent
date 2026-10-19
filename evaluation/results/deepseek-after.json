@@ -1,0 +1,305 @@
+{
+  "run_at": "2026-10-18T06:50:56+00:00",
+  "summary": {
+    "total_cases": 12,
+    "scored": 12,
+    "fallbacks": 0,
+    "category_accuracy": 1.0,
+    "priority_accuracy": 0.8333333333333334,
+    "tool_accuracy": 1.0,
+    "all_correct": 0.8333333333333334,
+    "avg_latency_s": 1.9,
+    "by_category": {
+      "Network Issues": {
+        "n": 8,
+        "category_correct": 8
+      },
+      "SIM Replacement": {
+        "n": 4,
+        "category_correct": 4
+      }
+    },
+    "by_tag": {
+      "ambiguous": {
+        "n": 4,
+        "category_correct": 4,
+        "priority_correct": 4
+      },
+      "hinglish": {
+        "n": 1,
+        "category_correct": 1,
+        "priority_correct": 1
+      }
+    },
+    "priority_confusion": {
+      "P0": {
+        "P1": 2,
+        "P0": 4
+      },
+      "P1": {
+        "P1": 3
+      },
+      "P2": {
+        "P2": 3
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "net-01",
+      "tags": [],
+      "message": "Network problem since 2 days",
+      "expected_category": "Network Issues",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_network_status"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P1",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 2.89,
+      "category_ok": true,
+      "priority_ok": false,
+      "tool_ok": true,
+      "all_ok": false
+    },
+    {
+      "id": "net-02",
+      "tags": [],
+      "message": "No signal at all since this morning, I can't make or receive any calls",
+      "expected_category": "Network Issues",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_network_status"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P0",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.67,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "net-03",
+      "tags": [
+        "ambiguous"
+      ],
+      "message": "My phone shows no service whenever I am indoors",
+      "expected_category": "Network Issues",
+      "expected_priority": "P1",
+      "expected_tools": [
+        "lookup_network_status",
+        "lookup_customer_profile"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P1",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.74,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "net-04",
+      "tags": [],
+      "message": "Internet is very slow in the evenings",
+      "expected_category": "Network Issues",
+      "expected_priority": "P2",
+      "expected_tools": [
+        "lookup_network_status",
+        "lookup_knowledge"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P2",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.89,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "net-05",
+      "tags": [
+        "ambiguous"
+      ],
+      "message": "Calls keep dropping in the middle of the conversation",
+      "expected_category": "Network Issues",
+      "expected_priority": "P1",
+      "expected_tools": [
+        "lookup_network_status",
+        "lookup_customer_profile"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P1",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 2.1,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "net-06",
+      "tags": [],
+      "message": "Mobile data has not worked since last night, it only shows E",
+      "expected_category": "Network Issues",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_network_status"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P1",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.82,
+      "category_ok": true,
+      "priority_ok": false,
+      "tool_ok": true,
+      "all_ok": false
+    },
+    {
+      "id": "net-07",
+      "tags": [
+        "hinglish"
+      ],
+      "message": "Network nahi aa raha hai kal se, call bhi nahi lag rahi",
+      "expected_category": "Network Issues",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_network_status"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P0",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.57,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "net-08",
+      "tags": [],
+      "message": "Signal bars are low in my new apartment",
+      "expected_category": "Network Issues",
+      "expected_priority": "P2",
+      "expected_tools": [
+        "lookup_network_status",
+        "lookup_knowledge"
+      ],
+      "pred_category": "Network Issues",
+      "pred_priority": "P2",
+      "pred_tool": "lookup_network_status",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.87,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "sim-01",
+      "tags": [
+        "ambiguous"
+      ],
+      "message": "I lost my phone yesterday, please block my SIM and issue a new one",
+      "expected_category": "SIM Replacement",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_customer_profile",
+        "lookup_knowledge"
+      ],
+      "pred_category": "SIM Replacement",
+      "pred_priority": "P0",
+      "pred_tool": "lookup_customer_profile",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.78,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "sim-02",
+      "tags": [],
+      "message": "My SIM got blocked after some suspicious activity and I can't make any calls",
+      "expected_category": "SIM Replacement",
+      "expected_priority": "P0",
+      "expected_tools": [
+        "lookup_customer_profile"
+      ],
+      "pred_category": "SIM Replacement",
+      "pred_priority": "P0",
+      "pred_tool": "lookup_customer_profile",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.69,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "sim-03",
+      "tags": [],
+      "message": "I submitted my KYC three days ago but my new SIM is still not active",
+      "expected_category": "SIM Replacement",
+      "expected_priority": "P1",
+      "expected_tools": [
+        "lookup_customer_profile"
+      ],
+      "pred_category": "SIM Replacement",
+      "pred_priority": "P1",
+      "pred_tool": "lookup_customer_profile",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.79,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    },
+    {
+      "id": "sim-04",
+      "tags": [
+        "ambiguous"
+      ],
+      "message": "My SIM card is physically damaged, please send me a replacement",
+      "expected_category": "SIM Replacement",
+      "expected_priority": "P2",
+      "expected_tools": [
+        "lookup_customer_profile",
+        "lookup_knowledge"
+      ],
+      "pred_category": "SIM Replacement",
+      "pred_priority": "P2",
+      "pred_tool": "lookup_customer_profile",
+      "fallback": false,
+      "error": null,
+      "latency_s": 1.99,
+      "category_ok": true,
+      "priority_ok": true,
+      "tool_ok": true,
+      "all_ok": true
+    }
+  ]
+}
